@@ -118,7 +118,7 @@ export function Footer() {
             <div className="flex items-center space-x-1">
               <span>Made with</span>
               <Heart className="w-4 h-4 text-red-400 fill-current" />
-              <span>by the Flash Feed team</span>
+              <span>by the FlashFeed.AI team</span>
             </div>
           </div>
 
