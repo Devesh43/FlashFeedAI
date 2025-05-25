@@ -175,6 +175,5 @@ GEMINI_API_KEY=your-gemini-key-here
 
 ## ⭐ Star this repo if you find it useful!
 
-```
 
 
