@@ -346,188 +346,6 @@ function removeDuplicates(articles: NewsArticle[]): NewsArticle[] {
   })
 }
 
-function searchArticles(articles: NewsArticle[], query: string): NewsArticle[] {
-  const queryLower = query.toLowerCase()
-  const queryWords = queryLower
-    .split(/\s+/)
-    .filter((word) => word.length > 2)
-    .map((word) => word.replace(/[^\w]/g, ""))
-
-  if (queryWords.length === 0) return []
-
-  const scored = articles.map((article) => {
-    const titleLower = article.title.toLowerCase()
-    const summaryLower = article.summary.toLowerCase()
-    const textLower = `${titleLower} ${summaryLower}`
-    let score = 0
-
-    // Exact query match
-    if (textLower.includes(queryLower)) {
-      score += 500
-    }
-
-    // Title matches
-    if (titleLower.includes(queryLower)) {
-      score += 350
-    }
-
-    // Individual word matches
-    queryWords.forEach((word) => {
-      const wordRegex = new RegExp(`\\b${word}\\b`, "gi")
-      const titleMatches = titleLower.match(wordRegex) || []
-      const summaryMatches = summaryLower.match(wordRegex) || []
-
-      score += titleMatches.length * 100
-      score += summaryMatches.length * 50
-
-      if (titleLower.includes(word)) score += 60
-      if (summaryLower.includes(word)) score += 30
-    })
-
-    // Recency boost
-    if (article.pubDate.includes("ago") || article.pubDate === "Just now") {
-      score += 25
-    }
-
-    article.relevanceScore = score
-    return { article, score }
-  })
-
-  const results = scored
-    .filter((item) => item.score > 50)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 15)
-
-  console.log(`🔍 Found ${results.length} relevant articles for "${query}"`)
-  return results.map((item) => item.article)
-}
-
-// Initialize Gemini AI with proper API key
-const getGeminiModel = () => {
-  // Debug environment variables
-  console.log("🔑 Environment Debug:")
-  console.log("   - NODE_ENV:", process.env.NODE_ENV)
-  console.log("   - GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY)
-  console.log("   - NEXT_PUBLIC_GEMINI_API_KEY exists:", !!process.env.NEXT_PUBLIC_GEMINI_API_KEY)
-
-  // Use the working API key directly
-  const apiKey = "AIzaSyC12h8nyK-GORDHl1VcKif5u-CWZCRuzTo"
-
-  console.log("   - Using direct API key")
-  console.log("   - API key length:", apiKey.length)
-  console.log("   - API key preview:", `${apiKey.substring(0, 10)}...`)
-
-  console.log("✅ Using API key for Gemini")
-
-  try {
-    const genai = new GoogleGenerativeAI(apiKey)
-    return genai.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      generationConfig: {
-        temperature: 0.7,
-        topP: 0.9,
-        topK: 40,
-        maxOutputTokens: 4000,
-      },
-    })
-  } catch (error) {
-    console.error("❌ Failed to initialize Gemini model:", error)
-    throw new Error(`Failed to initialize Gemini: ${error.message}`)
-  }
-}
-
-// Web search using Gemini - ACTUALLY searches for the specific topic
-async function searchWebForTopic(query: string): Promise<string> {
-  console.log(`🌐 Searching web specifically for: "${query}"`)
-
-  try {
-    const model = getGeminiModel()
-
-    const prompt = `I need you to search for and provide comprehensive, current information specifically about "${query}".
-
-Please provide detailed information about "${query}" including:
-
-1. What exactly is happening with "${query}" right now?
-2. Latest news, developments, or updates about "${query}"
-3. Recent announcements, changes, or events related to "${query}"
-4. Current status and timeline of "${query}"
-5. Key facts, numbers, dates, and specific details about "${query}"
-6. Who are the main people/companies involved in "${query}"?
-7. What are the implications and significance of "${query}"?
-8. Recent market reactions, public response, or industry impact of "${query}"
-
-Focus entirely on "${query}" - I want specific, factual, up-to-date information about this exact topic. Include as many concrete details as possible (dates, numbers, names, locations, etc.).
-
-Provide comprehensive information about "${query}" that I can use to understand what's currently happening with this topic.`
-
-    const result = await model.generateContent(prompt)
-    const response = await result.response
-    const text = response.text().trim()
-
-    if (!text) {
-      throw new Error("Empty response from web search")
-    }
-
-    console.log(`✅ Web search completed for: "${query}"`)
-    return text
-  } catch (error) {
-    console.error("Web search error:", error)
-    throw new Error(`Failed to search web for "${query}": ${error.message}`)
-  }
-}
-
-// Generate UNIQUE AI analysis for each specific topic
-async function generateUniqueAnalysis(query: string, information: string, isWebSearch: boolean): Promise<string> {
-  console.log(`🤖 Creating unique analysis specifically for: "${query}"`)
-
-  try {
-    const model = getGeminiModel()
-
-    const sourceType = isWebSearch ? "web search results" : "recent news articles"
-
-    const prompt = `You are an expert analyst writing a comprehensive analysis specifically about "${query}".
-
-INFORMATION ABOUT "${query}":
-${information}
-
-YOUR TASK: Write a detailed, unique analysis about "${query}" based on the information above.
-
-REQUIREMENTS FOR THIS ANALYSIS:
-1. Focus ENTIRELY on "${query}" - this analysis should be 100% about this specific topic
-2. Extract and analyze the ACTUAL facts, events, and developments mentioned in the information
-3. Identify what makes "${query}" significant RIGHT NOW
-4. Discuss the specific implications and consequences of what's happening with "${query}"
-5. Include concrete details: dates, numbers, names, companies, locations from the information
-6. Analyze trends, patterns, and what this means for the future of "${query}"
-7. Write in a natural, engaging style - NOT templated or generic
-8. Make connections between different aspects of "${query}"
-9. Provide insights that go beyond just summarizing - analyze WHY this matters
-
-WRITING STYLE:
-- Write as if you're an expert who has deeply studied "${query}"
-- Use specific details and facts from the information provided
-- Make it conversational but professional
-- Avoid generic phrases like "this topic" or "this area" - always refer to "${query}" specifically
-- Each paragraph should reveal new insights about "${query}"
-
-Write a comprehensive, unique analysis about "${query}" that someone reading would find genuinely insightful and informative about this specific topic.`
-
-    const result = await model.generateContent(prompt)
-    const response = await result.response
-    const text = response.text().trim()
-
-    if (!text) {
-      throw new Error("Empty response from AI analysis")
-    }
-
-    console.log(`✅ Unique analysis generated for: "${query}"`)
-    return text
-  } catch (error) {
-    console.error("AI analysis error:", error)
-    throw new Error(`Failed to generate analysis for "${query}": ${error.message}`)
-  }
-}
-
 // Improved article search with better relevance scoring
 function searchArticlesImproved(articles: NewsArticle[], query: string): NewsArticle[] {
   const queryLower = query.toLowerCase()
@@ -624,60 +442,66 @@ function searchArticlesImproved(articles: NewsArticle[], query: string): NewsArt
   return results.map((item) => item.article)
 }
 
-// Comprehensive web search for when articles aren't sufficient
-async function searchWebComprehensive(query: string): Promise<string> {
-  console.log(`🌐 Conducting comprehensive web search for: "${query}"`)
+// Initialize Gemini AI with proper API key
+const getGeminiModel = () => {
+  // Use the working API key directly
+  const apiKey = "AIzaSyC12h8nyK-GORDHl1VcKif5u-CWZCRuzTo"
+
+  try {
+    const genai = new GoogleGenerativeAI(apiKey)
+    return genai.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        temperature: 0.7,
+        topP: 0.9,
+        topK: 40,
+        maxOutputTokens: 4000,
+      },
+    })
+  } catch (error) {
+    console.error("❌ Failed to initialize Gemini model:", error)
+    throw new Error(`Failed to initialize Gemini: ${error.message}`)
+  }
+}
+
+// Search web for articles about the topic and return structured article data
+async function searchWebForArticles(query: string): Promise<NewsArticle[]> {
+  console.log(`🌐 Searching web for articles about: "${query}"`)
 
   try {
     const model = getGeminiModel()
 
-    const prompt = `You are a professional research analyst. I need you to provide comprehensive, factual information about "${query}".
+    const prompt = `I need you to find recent news articles specifically about "${query}". 
 
-RESEARCH TASK: Gather detailed information about "${query}" including:
+Please search for and provide me with 8-10 recent news articles about "${query}" in the following EXACT format:
 
-1. CURRENT STATUS & LATEST DEVELOPMENTS:
-   - What is happening with "${query}" right now?
-   - Latest news, updates, announcements in the past 30 days
-   - Recent changes, developments, or milestones
-   - Current timeline and status
+ARTICLE 1:
+TITLE: [Exact article title]
+SUMMARY: [2-3 sentence summary of the article content]
+SOURCE: [News source name like CNN, BBC, Reuters, etc.]
+LINK: [Full article URL]
+CATEGORY: [Technology/Business/Entertainment/Sports/Science/Health/World/General]
+DATE: [Publication date or "Recent"]
 
-2. KEY FACTS & DATA:
-   - Important statistics, numbers, dates, figures
-   - Key people, companies, organizations involved
-   - Financial data, market information (if applicable)
-   - Technical specifications or details (if applicable)
+ARTICLE 2:
+TITLE: [Exact article title]
+SUMMARY: [2-3 sentence summary of the article content]
+SOURCE: [News source name]
+LINK: [Full article URL]
+CATEGORY: [Category]
+DATE: [Publication date or "Recent"]
 
-3. CONTEXT & BACKGROUND:
-   - Brief history and background of "${query}"
-   - Why this topic is significant or newsworthy
-   - Previous major developments or milestones
-   - Industry or sector context
-
-4. IMPACT & IMPLICATIONS:
-   - How this affects different stakeholders
-   - Market reactions, public response, industry impact
-   - Future implications and potential outcomes
-   - Broader significance and consequences
-
-5. EXPERT PERSPECTIVES:
-   - What experts, analysts, or industry leaders are saying
-   - Different viewpoints or opinions on the topic
-   - Predictions or forecasts related to "${query}"
-
-6. RELATED DEVELOPMENTS:
-   - Connected news, trends, or events
-   - Competing or alternative developments
-   - Regulatory or policy implications
+[Continue for 8-10 articles...]
 
 REQUIREMENTS:
-- Provide specific, factual, up-to-date information
-- Include concrete details: dates, numbers, names, locations
-- Focus on recent developments (last 30-90 days)
-- Cite specific examples and evidence
-- Be comprehensive but concise
-- Organize information clearly
+- Find REAL, recent articles about "${query}"
+- Include actual article titles and summaries
+- Provide working URLs to real news articles
+- Use reputable news sources (CNN, BBC, Reuters, TechCrunch, etc.)
+- Focus on articles from the last 30 days if possible
+- Make sure all articles are specifically about "${query}"
 
-Please provide detailed research findings about "${query}" that I can use for comprehensive analysis.`
+Please provide exactly 8-10 articles in the format above.`
 
     const result = await model.generateContent(prompt)
     const response = await result.response
@@ -687,12 +511,74 @@ Please provide detailed research findings about "${query}" that I can use for co
       throw new Error("Empty response from web search")
     }
 
-    console.log(`✅ Comprehensive web research completed for: "${query}"`)
-    console.log(`📄 Research data length: ${text.length} characters`)
-    return text
+    // Parse the response to extract articles
+    const articles = parseWebSearchResponse(text, query)
+    console.log(`✅ Found ${articles.length} web articles for: "${query}"`)
+    return articles
   } catch (error) {
     console.error("Web search error:", error)
-    throw new Error(`Failed to conduct comprehensive research for "${query}": ${error.message}`)
+    // Return empty array instead of throwing error
+    return []
+  }
+}
+
+// Parse the AI response to extract article data
+function parseWebSearchResponse(text: string, query: string): NewsArticle[] {
+  const articles: NewsArticle[] = []
+
+  try {
+    // Split by ARTICLE markers
+    const articleBlocks = text.split(/ARTICLE \d+:/i).slice(1) // Remove first empty element
+
+    for (const block of articleBlocks) {
+      const lines = block
+        .trim()
+        .split("\n")
+        .filter((line) => line.trim())
+
+      let title = ""
+      let summary = ""
+      let source = ""
+      let link = ""
+      let category = "General"
+      let date = "Recent"
+
+      for (const line of lines) {
+        const trimmedLine = line.trim()
+
+        if (trimmedLine.startsWith("TITLE:")) {
+          title = trimmedLine.replace("TITLE:", "").trim()
+        } else if (trimmedLine.startsWith("SUMMARY:")) {
+          summary = trimmedLine.replace("SUMMARY:", "").trim()
+        } else if (trimmedLine.startsWith("SOURCE:")) {
+          source = trimmedLine.replace("SOURCE:", "").trim()
+        } else if (trimmedLine.startsWith("LINK:")) {
+          link = trimmedLine.replace("LINK:", "").trim()
+        } else if (trimmedLine.startsWith("CATEGORY:")) {
+          category = trimmedLine.replace("CATEGORY:", "").trim()
+        } else if (trimmedLine.startsWith("DATE:")) {
+          date = trimmedLine.replace("DATE:", "").trim()
+        }
+      }
+
+      // Only add if we have essential fields
+      if (title && summary && source && link) {
+        articles.push({
+          title: title,
+          summary: summary,
+          link: link,
+          source: source,
+          pubDate: date,
+          category: category,
+          relevanceScore: 900, // High relevance since these are specifically searched
+        })
+      }
+    }
+
+    return articles.slice(0, 10) // Limit to 10 articles
+  } catch (error) {
+    console.error("Error parsing web search response:", error)
+    return []
   }
 }
 
@@ -704,13 +590,13 @@ async function generateComprehensiveAnalysis(
   articleCount: number,
 ): Promise<string> {
   console.log(`🤖 Creating comprehensive analysis for: "${query}"`)
-  console.log(`📊 Data source: ${isWebSearch ? "Web Research" : `${articleCount} News Articles`}`)
+  console.log(`📊 Data source: ${isWebSearch ? "Web Articles" : `${articleCount} News Articles`}`)
 
   try {
     const model = getGeminiModel()
 
-    const sourceType = isWebSearch ? "comprehensive web research" : `${articleCount} recent news articles`
-    const dataContext = isWebSearch ? "web intelligence and research data" : "breaking news and recent developments"
+    const sourceType = isWebSearch ? "web articles found online" : `${articleCount} recent news articles`
+    const dataContext = isWebSearch ? "web articles and online sources" : "breaking news and recent developments"
 
     const prompt = `You are an expert news analyst and researcher. Create a comprehensive, professional analysis about "${query}" based on the ${sourceType} provided below.
 
@@ -806,6 +692,7 @@ export async function POST(request: NextRequest) {
     let analysis: string
     let usedWebSearch = false
     let sourceData = ""
+    let finalArticles = relevantArticles
 
     if (relevantArticles.length >= 2) {
       // STEP 3A: Found relevant articles - create comprehensive analysis from articles
@@ -830,38 +717,77 @@ LINK: ${article.link}
 
       analysis = await generateComprehensiveAnalysis(cleanQuery, sourceData, false, relevantArticles.length)
     } else {
-      // STEP 3B: No relevant articles found - search web for comprehensive data
+      // STEP 3B: No relevant articles found - search web for articles about this topic
       console.log(
-        `❌ Only found ${relevantArticles.length} articles about "${cleanQuery}", searching web for comprehensive data...`,
+        `❌ Only found ${relevantArticles.length} articles about "${cleanQuery}", searching web for articles...`,
       )
       usedWebSearch = true
 
-      const webData = await searchWebComprehensive(cleanQuery)
-      sourceData = webData
-      analysis = await generateComprehensiveAnalysis(cleanQuery, webData, true, 0)
+      const webArticles = await searchWebForArticles(cleanQuery)
+
+      if (webArticles.length > 0) {
+        console.log(`✅ Found ${webArticles.length} web articles about "${cleanQuery}"`)
+
+        // Use web articles as our source
+        finalArticles = webArticles
+
+        // Create source data from web articles
+        sourceData = webArticles
+          .map(
+            (article, index) =>
+              `ARTICLE ${index + 1}:
+HEADLINE: ${article.title}
+SOURCE: ${article.source} (${article.category})
+PUBLISHED: ${article.pubDate}
+CONTENT: ${article.summary}
+LINK: ${article.link}
+
+---`,
+          )
+          .join("\n\n")
+
+        analysis = await generateComprehensiveAnalysis(cleanQuery, sourceData, true, webArticles.length)
+      } else {
+        // Fallback: No articles found anywhere
+        analysis = `I apologize, but I couldn't find any recent articles or information specifically about "${cleanQuery}". This could be because:
+
+1. The topic is very new or niche
+2. There may not be recent news coverage about this specific topic
+3. The search terms might need to be more specific
+
+Please try:
+- Using more specific search terms
+- Checking the spelling of the topic
+- Searching for related or broader topics
+- Trying again later as new articles are constantly being added
+
+You can also try searching for related topics or browse our trending topics and categories to find similar news.`
+
+        finalArticles = []
+      }
     }
 
     const totalTime = Date.now() - startTime
     console.log(`⚡ Total processing time: ${totalTime}ms`)
-    console.log(`📊 Analysis method: ${usedWebSearch ? "Web Search" : "Article Analysis"}`)
+    console.log(`📊 Analysis method: ${usedWebSearch ? "Web Articles" : "RSS Articles"}`)
     console.log(`🎯 Topic analyzed: "${cleanQuery}"\n`)
 
     return NextResponse.json({
       answer: analysis,
-      sources: relevantArticles,
+      sources: finalArticles,
       query: cleanQuery,
       meta: {
         totalArticles: allArticles.length,
-        relevantArticles: relevantArticles.length,
+        relevantArticles: finalArticles.length,
         processingTime: totalTime,
-        sources: [...new Set(relevantArticles.map((a) => a.source))],
+        sources: [...new Set(finalArticles.map((a) => a.source))],
         avgRelevanceScore:
-          relevantArticles.length > 0
-            ? Math.round(relevantArticles.reduce((sum, a) => sum + a.relevanceScore, 0) / relevantArticles.length)
+          finalArticles.length > 0
+            ? Math.round(finalArticles.reduce((sum, a) => sum + a.relevanceScore, 0) / finalArticles.length)
             : 0,
         totalSources: NEWS_SOURCES.length,
         usedWebSearch,
-        dataQuality: usedWebSearch ? "Web Intelligence" : "News Articles",
+        dataQuality: usedWebSearch ? "Web Articles" : "RSS Articles",
       },
     })
   } catch (error) {
