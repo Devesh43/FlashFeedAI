@@ -82,7 +82,7 @@ Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## ⚙️ How It Works
 
-1. User searches for a topic (e.g., "Marvel Avengers Doomsday").
+1. User searches for a topic (e.g., "Russia Ukraine War Updates").
 2. Backend checks multiple RSS feeds for relevant articles.
 3. If no RSS articles found, backend scrapes Google News search results for recent headlines.
 4. If Gemini API key is set, backend generates an AI summary of the topic using the headlines.
