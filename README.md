@@ -1,6 +1,6 @@
 # ⚡FlashFeed.AI
 
-FlashFeed is a modern, open-source news search and aggregation app built with Next.js and TypeScript. It fetches news from multiple free RSS sources. If no relevant articles are found, it automatically searches the web, extracts headlines, and  uses **Gemini AI** to generate a summary analysis. All relevant article links are displayed for user reference.
+FlashFeed.AI is a modern, open-source news search and aggregation app built with Next.js and TypeScript. It fetches news from multiple free RSS sources. If no relevant articles are found, it automatically searches the web, extracts headlines, and  uses **Gemini AI** to generate a summary analysis. All relevant article links are displayed for user reference.
 
 ---
 
